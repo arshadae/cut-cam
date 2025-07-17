@@ -314,3 +314,32 @@ If you use the original [pix2pix](https://phillipi.github.io/pix2pix/) and [Cycl
 
 ### Acknowledgments
 We thank Allan Jabri and Phillip Isola for helpful discussion and feedback. Our code is developed based on [pytorch-CycleGAN-and-pix2pix](https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix). We also thank [pytorch-fid](https://github.com/mseitzer/pytorch-fid) for FID computation,  [drn](https://github.com/fyu/drn) for mIoU computation, and [stylegan2-pytorch](https://github.com/rosinality/stylegan2-pytorch/) for the PyTorch implementation of StyleGAN2 used in our single-image translation setting.
+
+
+## Planned Additional Evalutions for CUT
+
+### Evaluation Metrics
+
+Besides FID, you plan to use:
+
+- **Inception Score (IS)**
+- **Kernel Inception Distance (KID)**
+- **LPIPS (Learned Perceptual Image Patch Similarity)**
+- **Precision and Recall for Generative Models**
+- **Classification Accuracy with a pretrained model**
+- **Semantic Segmentation metrics (e.g., mIoU)**
+- **User Study / Human Evaluation**
+
+These metrics help assess image quality, diversity, perceptual similarity, and semantic consistency.
+
+### Visualization Techniques
+
+To qualitatively validate the results, we also consider:
+
+- **Side-by-side comparisons** of input, generated, and target images
+- **t-SNE or UMAP plots** of feature embeddings for real and generated images
+- **Difference maps** to highlight changes
+- **Activation or attention maps** (e.g., Grad-CAM)
+- **Montages or grids** of generated samples
+- **Histogram plots** for color or feature distributions
+- **Semantic segmentation overlays** for
