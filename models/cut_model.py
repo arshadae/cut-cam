@@ -82,10 +82,10 @@ class CUTModel(BaseModel):
             self.criterionGAN = networks.GANLoss(opt.gan_mode).to(self.device)
             self.criterionNCE = []
 
-            for nce_layer in self.nce_layers:
-                self.criterionNCE.append(PatchNCELoss(opt).to(self.device))
+            # for nce_layer in self.nce_layers:
+            #     self.criterionNCE.append(PatchNCELoss(opt).to(self.device))
 
-            self.criterionIdt = torch.nn.L1Loss().to(self.device)
+            # self.criterionIdt = torch.nn.L1Loss().to(self.device)
             self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr, betas=(opt.beta1, opt.beta2))
             self.optimizer_D = torch.optim.Adam(self.netD.parameters(), lr=opt.lr, betas=(opt.beta1, opt.beta2))
             self.optimizers.append(self.optimizer_G)
@@ -98,17 +98,17 @@ class CUTModel(BaseModel):
         initialized at the first feedforward pass with some input images.
         Please also see PatchSampleF.create_mlp(), which is called at the first forward() call.
         """
-        bs_per_gpu = data["A"].size(0) // max(len(self.opt.gpu_ids), 1)
+        # bs_per_gpu = data["A"].size(0) // max(len(self.opt.gpu_ids), 1)
         self.set_input(data)
-        self.real_A = self.real_A[:bs_per_gpu]
-        self.real_B = self.real_B[:bs_per_gpu]
+        # self.real_A = self.real_A[:bs_per_gpu]
+        # self.real_B = self.real_B[:bs_per_gpu]
         self.forward()                     # compute fake images: G(A)
         if self.opt.isTrain:
             self.compute_D_loss().backward()                  # calculate gradients for D
             self.compute_G_loss().backward()                   # calculate graidents for G
-            if self.opt.lambda_NCE > 0.0:
-                self.optimizer_F = torch.optim.Adam(self.netF.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, self.opt.beta2))
-                self.optimizers.append(self.optimizer_F)
+            # if self.opt.lambda_NCE > 0.0:
+            #     self.optimizer_F = torch.optim.Adam(self.netF.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, self.opt.beta2))
+            #     self.optimizers.append(self.optimizer_F)
 
     def optimize_parameters(self):
         # forward
@@ -124,13 +124,13 @@ class CUTModel(BaseModel):
         # update G
         self.set_requires_grad(self.netD, False)
         self.optimizer_G.zero_grad()
-        if self.opt.netF == 'mlp_sample':
-            self.optimizer_F.zero_grad()
+        # if self.opt.netF == 'mlp_sample':
+        #     self.optimizer_F.zero_grad()
         self.loss_G = self.compute_G_loss()
         self.loss_G.backward()
         self.optimizer_G.step()
-        if self.opt.netF == 'mlp_sample':
-            self.optimizer_F.step()
+        # if self.opt.netF == 'mlp_sample':
+        #     self.optimizer_F.step()
 
     def set_input(self, input):
         """Unpack input data from the dataloader and perform necessary pre-processing steps.
@@ -145,31 +145,30 @@ class CUTModel(BaseModel):
 
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
-        self.real = torch.cat((self.real_A, self.real_B), dim=0) if self.opt.nce_idt and self.opt.isTrain else self.real_A
+        real = torch.cat((self.real_A, self.real_B), dim=0) if self.opt.nce_idt and self.opt.isTrain else self.real_A
         if self.opt.flip_equivariance:
             self.flipped_for_equivariance = self.opt.isTrain and (np.random.random() < 0.5)
             if self.flipped_for_equivariance:
-                self.real = torch.flip(self.real, [3])
+                real = torch.flip(real, [3])
 
-        self.fake = self.netG(self.real)
-        self.fake_B = self.fake[:self.real_A.size(0)]
+        fake = self.netG(real)
+        self.fake_B = fake[:self.real_A.size(0)]
         if self.opt.nce_idt:
-            self.idt_B = self.fake[self.real_A.size(0):]
+            self.idt_B = fake[self.real_A.size(0):]
 
     def compute_D_loss(self):
         """Calculate GAN loss for the discriminator"""
         fake = self.fake_B.detach()
-        # Fake; stop backprop to the generator by detaching fake_B
+        # .detach() ensures no gradient flows back to the generator during discriminator training.
         pred_fake = self.netD(fake)
-        self.loss_D_fake = self.criterionGAN(pred_fake, False).mean()
+        loss_D_fake = self.criterionGAN(pred_fake, False).mean()
         # Real
-        self.pred_real = self.netD(self.real_B)
-        loss_D_real = self.criterionGAN(self.pred_real, True)
-        self.loss_D_real = loss_D_real.mean()
-
+        pred_real = self.netD(self.real_B) # Potential Pitfall (DDP): storing intermediate outputs as class attributes
+        loss_D_real = self.criterionGAN(pred_real, True).mean()
+        
         # combine loss and calculate gradients
-        self.loss_D = (self.loss_D_fake + self.loss_D_real) * 0.5
-        return self.loss_D
+        loss_D = (loss_D_fake + loss_D_real) * 0.5
+        return loss_D
 
     def compute_G_loss(self):
         """Calculate GAN and NCE loss for the generator"""
@@ -177,23 +176,23 @@ class CUTModel(BaseModel):
         # First, G(A) should fake the discriminator
         if self.opt.lambda_GAN > 0.0:
             pred_fake = self.netD(fake)
-            self.loss_G_GAN = self.criterionGAN(pred_fake, True).mean() * self.opt.lambda_GAN
+            loss_G_GAN = self.criterionGAN(pred_fake, True).mean() * self.opt.lambda_GAN
         else:
-            self.loss_G_GAN = 0.0
+            loss_G_GAN = 0.0
 
         if self.opt.lambda_NCE > 0.0:
-            self.loss_NCE = self.calculate_NCE_loss(self.real_A, self.fake_B)
+            loss_NCE = self.calculate_NCE_loss(self.real_A, self.fake_B)
         else:
-            self.loss_NCE, self.loss_NCE_bd = 0.0, 0.0
+            loss_NCE, loss_NCE_bd = 0.0, 0.0
 
         if self.opt.nce_idt and self.opt.lambda_NCE > 0.0:
-            self.loss_NCE_Y = self.calculate_NCE_loss(self.real_B, self.idt_B)
-            loss_NCE_both = (self.loss_NCE + self.loss_NCE_Y) * 0.5
+            loss_NCE_Y = self.calculate_NCE_loss(self.real_B, self.idt_B)
+            loss_NCE_both = (loss_NCE + loss_NCE_Y) * 0.5
         else:
-            loss_NCE_both = self.loss_NCE
+            loss_NCE_both = loss_NCE
 
-        self.loss_G = self.loss_G_GAN + loss_NCE_both
-        return self.loss_G
+        loss_G = loss_G_GAN + loss_NCE_both
+        return loss_G
 
     def calculate_NCE_loss(self, src, tgt):
         n_layers = len(self.nce_layers)

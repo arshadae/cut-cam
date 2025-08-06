@@ -39,6 +39,14 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--pool_size', type=int, default=50, help='the size of image buffer that stores previously generated images')
         parser.add_argument('--lr_policy', type=str, default='linear', help='learning rate policy. [linear | step | plateau | cosine]')
         parser.add_argument('--lr_decay_iters', type=int, default=50, help='multiply by a gamma every lr_decay_iters iterations')
+        
+        # distributed training parameters
+        parser.add_argument('--master_port', default=12355, help='define master port for distrabuted data parallel (DDP) training')
+        parser.add_argument('--dist_backend', default='nccl', help='distributed backend')
+        parser.add_argument('--nnodes', type=int, default=1, help='number of nodes for distributed training (e.g., sever nodes)')
+        parser.add_argument('--nprocs_per_node', type=int, default=4, help='number of processes per node for distributed training (world_size)')
+        parser.add_argument('--node_rank', type=int, default=0, help='node rank for distributed training')
+
 
         self.isTrain = True
         return parser

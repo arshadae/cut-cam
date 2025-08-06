@@ -1,5 +1,3 @@
-
-
 # Contrastive Unpaired Translation (CUT)
 
 ### [video (1m)](https://youtu.be/Llg0vE_MVgk) |  [video (10m)](https://youtu.be/jSGOzjmN8q0) | [website](http://taesung.me/ContrastiveUnpairedTranslation/) |   [paper](https://arxiv.org/pdf/2007.15651)
@@ -316,11 +314,15 @@ If you use the original [pix2pix](https://phillipi.github.io/pix2pix/) and [Cycl
 We thank Allan Jabri and Phillip Isola for helpful discussion and feedback. Our code is developed based on [pytorch-CycleGAN-and-pix2pix](https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix). We also thank [pytorch-fid](https://github.com/mseitzer/pytorch-fid) for FID computation,  [drn](https://github.com/fyu/drn) for mIoU computation, and [stylegan2-pytorch](https://github.com/rosinality/stylegan2-pytorch/) for the PyTorch implementation of StyleGAN2 used in our single-image translation setting.
 
 
-## Planned Additional Evalutions for CUT
+# CUTCAM
+1. Perform thorough evalutions on Contrastive Unpaired Translation (CUT)
+2. Find research gaps
+3. Fill the gaps
+
+## 1. Planned Additional Evalutions for CUT
 
 ### Evaluation Metrics
-
-Besides FID, you plan to use:
+Besides FID, we plan following evaluations:
 
 - **Inception Score (IS)**
 - **Kernel Inception Distance (KID)**
@@ -333,8 +335,7 @@ Besides FID, you plan to use:
 These metrics help assess image quality, diversity, perceptual similarity, and semantic consistency.
 
 ### Visualization Techniques
-
-To qualitatively validate the results, we also consider:
+To qualitatively validate the results, we also consider following visualization techniques
 
 - **Side-by-side comparisons** of input, generated, and target images
 - **t-SNE or UMAP plots** of feature embeddings for real and generated images
@@ -343,3 +344,12 @@ To qualitatively validate the results, we also consider:
 - **Montages or grids** of generated samples
 - **Histogram plots** for color or feature distributions
 - **Semantic segmentation overlays** for
+
+
+
+
+
+
+# Acknowledgements
+- We borrowed heavily from [pytorch-CycleGAN-and-pix2pix](https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix) and [contrastive-unpaired-translation](https://github.com/taesungp/contrastive-unpaired-translation) to develop our codebase. 
+- We thank [pytorch-fid](https://github.com/mseitzer/pytorch-fid) for FID computation.

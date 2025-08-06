@@ -49,11 +49,15 @@ class UnalignedDataset(BaseDataset):
             A_paths (str)    -- image paths
             B_paths (str)    -- image paths
         """
+        BaseDataset.__getitem__(self, index)  # call the base class' __getitem__ method
         A_path = self.A_paths[index % self.A_size]  # make sure index is within then range
-        if self.opt.serial_batches:   # make sure index is within then range
-            index_B = index % self.B_size
-        else:   # randomize the index for domain B to avoid fixed pairs.
-            index_B = random.randint(0, self.B_size - 1)
+        # if self.opt.serial_batches:   # make sure index is within then range
+        #     index_B = index % self.B_size
+        # else:   # randomize the index for domain B to avoid fixed pairs.
+        #     index_B = random.randint(0, self.B_size - 1)
+
+        index_B = index % self.B_size
+
         B_path = self.B_paths[index_B]
         A_img = Image.open(A_path).convert('RGB')
         B_img = Image.open(B_path).convert('RGB')
