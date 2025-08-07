@@ -3,22 +3,29 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data import DataLoader, DistributedSampler, TensorDataset
-from models.sample_models import MyModel
+from torch.utils.data import DataLoader, DistributedSampler
+from models.my_model import MyModel
+from models.cut_model import CUTModel
 from options.train_options import TrainOptions
 from data.unaligned_dataset import UnalignedDataset
-from models.custom_loss_criterion import HardThresholdLoss  # Custom loss function
+
 
 
 def setup(rank, world_size):
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12357'  # Use a free port
-    dist.init_process_group("nccl", rank=rank, world_size=world_size) # "nccl" is GPU only backend, "gloo" is CPU and GPU compatible
+    dist.init_process_group("nccl", rank=rank, world_size=world_size)
     torch.cuda.set_device(rank)
 
 def cleanup():
     dist.destroy_process_group()
     torch.cuda.empty_cache()
+
+def move_dict_to_device(batch, device):
+    return {
+        k: v.to(device) if isinstance(v, torch.Tensor) else v
+        for k, v in batch.items()
+    }
 
 def train(rank, world_size):
     is_distributed = world_size > 1
@@ -28,8 +35,8 @@ def train(rank, world_size):
     opt = TrainOptions().parse()  # get training options
     
     # Custom model
-    my_model = MyModel().to(rank)
-    ddp_model = DDP(my_model, device_ids=[rank])
+    my_model = MyModel(opt).to(rank)
+    ddp_model = DDP(my_model, device_ids=[rank], find_unused_parameters=True) if is_distributed else my_model
 
     # Create dataset
     dataset = UnalignedDataset(opt)  # create a dataset
@@ -42,37 +49,20 @@ def train(rank, world_size):
         drop_last=True if opt.isTrain else False)
         # num_workers here refer to the number of CPU worker processes used per GPU/process to load data in parallel.
     if rank == 0:  # Only print dataset size from the main process
-        print('The number of training images = %d' % len(dataloader.dataset))    
+        print('The number of training images = %d' % len(dataloader.dataset))
 
-
-    criterion = HardThresholdLoss() # Loss functions in PyTorch are device agnostic
-    optimizer = torch.optim.Adam(ddp_model.parameters(), lr=0.001) # Optimizers in PyTorch are also device agnostic
-    
     # Training loop
     for epoch in range(3):
         sampler.set_epoch(epoch)
-        for batch in dataloader:
-            AtoB = opt.direction == 'AtoB'
-            inputs, targets, _, _ = batch['A' if AtoB else 'B'], batch['B' if AtoB else 'A'], batch['A_paths'], batch['B_paths']
-            inputs, targets = inputs.to(rank), targets.to(rank)
-
-            outputs = ddp_model(inputs)            
-            # Forward pass: it internally calls ddp_model.forward(inputs)
-            if rank == 0 and epoch ==0:  # Only print shapes from the main process
-                print(f"input shape: {inputs.shape}, output shape: {outputs.shape}, target shape: {targets.shape}")
-
-
-            loss_tensor = criterion(outputs, targets) 
-            # Calling forward method of the loss class, returns a Tensor with requires_grad=True
-            # loss_tensor is a scalar tensor with a gradient function attached to it
-            # print(f"Loss grad_fn: {loss_tensor.grad_fn}") # <NllLossBackward> or similar
-
-            optimizer.zero_grad() # Clear previous gradients       
-            loss_tensor.backward() # Backpropagation, traiggers autograd to compute new gradients
-            # print(f"outputs grad_fn: {outputs.grad_fn}") 
-            # Now outputs also has gradients attached to it
+        for batch_idx, batch in enumerate(dataloader):
+            batch = move_dict_to_device(batch, rank)  # Move batch data to the current device (GPU)
             
-            optimizer.step() # Update model parameters (weights) based on the computed gradients
+            if epoch == opt.epoch_count and batch_idx == 0:
+                ddp_model.module.data_dependent_initialize(**batch)
+                ddp_model.module.setup(opt) # regular setup: load and print networks; create schedulers
+
+            ddp_model.module.set_input(**batch)  # unpack data from dataset and apply preprocessing
+            ddp_model.module.optimize_parameters()   # calculate loss functions, get gradients, update network weights
 
         if rank == 0:
             print(f"Epoch {epoch} done.")

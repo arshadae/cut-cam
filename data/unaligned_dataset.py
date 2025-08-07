@@ -49,7 +49,7 @@ class UnalignedDataset(BaseDataset):
             A_paths (str)    -- image paths
             B_paths (str)    -- image paths
         """
-        super().__getitem__(self, index)  # call the base class' __getitem__ method
+        super().__getitem__(index)  # call the base class' __getitem__ method
         A_path = self.A_paths[index % self.A_size]  # make sure index is within then range
         # if self.opt.serial_batches:   # make sure index is within then range
         #     index_B = index % self.B_size
