@@ -1,27 +1,12 @@
 import torch.nn as nn
 from torchvision.models import resnet18
 
-class MyGenerator(nn.Module):
+class MyModel(nn.Module):
     def __init__(self):
         super().__init__()
-        self.netA = nn.Sequential(
-            nn.Conv2d(3, 16, kernel_size=3, padding=1),
-            nn.ReLU()
-        )
-        self.netB = nn.Sequential(
-            nn.Conv2d(16, 3, kernel_size=3, padding=1),
-            nn.Tanh()
-        )
+        
+        # define networks: both Generator and Discriminator can be defined here
 
-    def forward(self, x):
-        x = self.netA(x)
-        x = self.netB(x)
-        return x
-    
-
-class MyGenerator2(nn.Module):
-    def __init__(self):
-        super().__init__()
 
         # Load pretrained ResNet18 and remove final layers
         resnet = resnet18(pretrained=True)

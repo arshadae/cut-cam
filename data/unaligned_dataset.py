@@ -23,7 +23,7 @@ class UnalignedDataset(BaseDataset):
         Parameters:
             opt (Option class) -- stores all the experiment flags; needs to be a subclass of BaseOptions
         """
-        BaseDataset.__init__(self, opt)
+        super().__init__(opt)
         self.dir_A = os.path.join(opt.dataroot, opt.phase + 'A')  # create a path '/path/to/data/trainA'
         self.dir_B = os.path.join(opt.dataroot, opt.phase + 'B')  # create a path '/path/to/data/trainB'
 
@@ -49,7 +49,7 @@ class UnalignedDataset(BaseDataset):
             A_paths (str)    -- image paths
             B_paths (str)    -- image paths
         """
-        BaseDataset.__getitem__(self, index)  # call the base class' __getitem__ method
+        super().__getitem__(self, index)  # call the base class' __getitem__ method
         A_path = self.A_paths[index % self.A_size]  # make sure index is within then range
         # if self.opt.serial_batches:   # make sure index is within then range
         #     index_B = index % self.B_size

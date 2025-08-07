@@ -4,7 +4,7 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler, TensorDataset
-from models.sample_models import MyGenerator2
+from models.sample_models import MyModel
 from options.train_options import TrainOptions
 from data.unaligned_dataset import UnalignedDataset
 from models.custom_loss_criterion import HardThresholdLoss  # Custom loss function
@@ -28,7 +28,7 @@ def train(rank, world_size):
     opt = TrainOptions().parse()  # get training options
     
     # Custom model
-    my_model = MyGenerator2().to(rank)
+    my_model = MyModel().to(rank)
     ddp_model = DDP(my_model, device_ids=[rank])
 
     # Create dataset
