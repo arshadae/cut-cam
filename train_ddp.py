@@ -34,17 +34,8 @@ def train(rank, world_size):
     if is_distributed:
         setup(rank, world_size)
     opt = TrainOptions().parse()   # get training options
-    # dataset = create_dataset(opt)  # create a dataset given opt.dataset_mode and other options
-    # dataset_size = len(dataset)    # get the number of images in the dataset.
-    # Create dataset, resolve batch_size not 8 problem
-    dataset = UnalignedDataset(opt)  # create a dataset
-    sampler = DistributedSampler(dataset) if is_distributed else None
-    dataloader = DataLoader(
-        dataset, 
-        batch_size=opt.batch_size // world_size, 
-        sampler=sampler,
-        num_workers=int(opt.num_threads), 
-        drop_last=True if opt.isTrain else False)
+
+    dataloader, sampler = create_dataset(opt, is_distributed, rank, world_size)
     dataset_size = len(dataloader.dataset)
     # model = create_model(opt)      # create a model given opt.model and other options
     # print('The number of training images = %d' % dataset_size)

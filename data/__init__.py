@@ -13,6 +13,7 @@ See our template dataset class 'template_dataset.py' for more details.
 import importlib
 import torch.utils.data
 from data.base_dataset import BaseDataset
+from torch.utils.data import DataLoader, DistributedSampler
 
 
 def find_dataset_using_name(dataset_name):
@@ -44,7 +45,7 @@ def get_option_setter(dataset_name):
     return dataset_class.modify_commandline_options
 
 
-def create_dataset(opt):
+def create_dataset(opt, is_distributed=False, rank=0, world_size=1):
     """Create a dataset given the option.
 
     This function wraps the class CustomDatasetDataLoader.
@@ -54,9 +55,32 @@ def create_dataset(opt):
         >>> from data import create_dataset
         >>> dataset = create_dataset(opt)
     """
-    data_loader = CustomDatasetDataLoader(opt)
-    dataset = data_loader.load_data()
-    return dataset
+    if is_distributed:
+        dataset_class = find_dataset_using_name(opt.dataset_mode)
+        dataset = dataset_class(opt)
+        if rank == 0:  # Only print dataset size from the main process
+            print(f"Dataset [{type(dataset).__name__}] is created with {len(dataset)} samples.")
+        
+        sampler = DistributedSampler(
+            dataset, 
+            num_replicas=world_size, 
+            rank=rank, 
+            shuffle=True
+            ) if is_distributed else None
+
+        dataloader = DataLoader(
+            dataset,
+            batch_size=opt.batch_size // (world_size if is_distributed else 1),
+            sampler=sampler,
+            shuffle=(sampler is None),  # No shuffle when using DistributedSampler
+            num_workers=int(opt.num_threads),
+            drop_last=opt.isTrain
+        )
+        return dataloader, sampler
+    else:
+        data_loader = CustomDatasetDataLoader(opt)
+        dataset = data_loader.load_data()
+        return dataset
 
 
 class CustomDatasetDataLoader():
