@@ -10,7 +10,16 @@ from .stylegan_networks import StyleGAN2Discriminator, StyleGAN2Generator, TileS
 ###############################################################################
 # Helper Functions
 ###############################################################################
+"""This file is modified from networks.py in original contrastive-unpaired-translation repository.
+Original link: https://github.com/taesungp/contrastive-unpaired-translation/blob/master/models/networks.py
 
+Modifications are made by Arshad MA and modification log is provided below.
+Modification Log:
+- Removed all instances of opt.gpu_ids from the code as they are irrelevant in the context of DDP training.
+- All conditional statements that check for opt.gpu_ids have been modified accordingly.
+- Added device handling to ensure that the MLP is created on the same device as the features, with mlp = mlp.to(feat.device)  in create_mlp() method.
+- Adusted PatchSampleF.forward() to avoid the warning for calling torch.tensor on an existing tensor, by using .clone().detach() when patch_id is already a tensor.
+"""
 
 def get_filter(filt_size=3):
     if(filt_size == 1):
@@ -195,28 +204,23 @@ def init_weights(net, init_type='normal', init_gain=0.02, debug=False):
     net.apply(init_func)  # apply the initialization function <init_func>
 
 
-def init_net(net, init_type='normal', init_gain=0.02, gpu_ids=[], debug=False, initialize_weights=True):
+def init_net(net, init_type='normal', init_gain=0.02, debug=False, initialize_weights=True):
     """Initialize a network: 1. register CPU/GPU device (with multi-GPU support); 2. initialize the network weights
     Parameters:
         net (network)      -- the network to be initialized
         init_type (str)    -- the name of an initialization method: normal | xavier | kaiming | orthogonal
         gain (float)       -- scaling factor for normal, xavier and orthogonal.
-        gpu_ids (int list) -- which GPUs the network runs on: e.g., 0,1,2
 
     Return an initialized network.
     """
-    if len(gpu_ids) > 0:
-        assert(torch.cuda.is_available())
-        net.to(gpu_ids[0])
-        # if not amp:
-        # net = torch.nn.DataParallel(net, gpu_ids)  # multi-GPUs for non-AMP training
+
     if initialize_weights:
         init_weights(net, init_type, init_gain=init_gain, debug=debug)
     return net
 
 
 def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, init_type='normal',
-             init_gain=0.02, no_antialias=False, no_antialias_up=False, gpu_ids=[], opt=None):
+             init_gain=0.02, no_antialias=False, no_antialias_up=False, opt=None):
     """Create a generator
 
     Parameters:
@@ -228,7 +232,7 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
         use_dropout (bool) -- if use dropout layers.
         init_type (str)    -- the name of our initialization method.
         init_gain (float)  -- scaling factor for normal, xavier and orthogonal.
-        gpu_ids (int list) -- which GPUs the network runs on: e.g., 0,1,2
+
 
     Returns a generator
 
@@ -265,26 +269,26 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
         net = G_Resnet(input_nc, output_nc, opt.nz, num_downs=2, n_res=n_blocks - 4, ngf=ngf, norm='inst', nl_layer='relu')
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
-    return init_net(net, init_type, init_gain, gpu_ids, initialize_weights=('stylegan2' not in netG))
+    return init_net(net, init_type, init_gain, initialize_weights=('stylegan2' not in netG))
 
 
-def define_F(input_nc, netF, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, no_antialias=False, gpu_ids=[], opt=None):
+def define_F(input_nc, netF, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, no_antialias=False, opt=None):
     if netF == 'global_pool':
         net = PoolingF()
     elif netF == 'reshape':
         net = ReshapeF()
     elif netF == 'sample':
-        net = PatchSampleF(use_mlp=False, init_type=init_type, init_gain=init_gain, gpu_ids=gpu_ids, nc=opt.netF_nc)
+        net = PatchSampleF(use_mlp=False, init_type=init_type, init_gain=init_gain, nc=opt.netF_nc)
     elif netF == 'mlp_sample':
-        net = PatchSampleF(use_mlp=True, init_type=init_type, init_gain=init_gain, gpu_ids=gpu_ids, nc=opt.netF_nc)
+        net = PatchSampleF(use_mlp=True, init_type=init_type, init_gain=init_gain, nc=opt.netF_nc)
     elif netF == 'strided_conv':
-        net = StridedConvF(init_type=init_type, init_gain=init_gain, gpu_ids=gpu_ids)
+        net = StridedConvF(init_type=init_type, init_gain=init_gain)
     else:
         raise NotImplementedError('projection model name [%s] is not recognized' % netF)
-    return init_net(net, init_type, init_gain, gpu_ids)
+    return init_net(net, init_type, init_gain)
 
 
-def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal', init_gain=0.02, no_antialias=False, gpu_ids=[], opt=None):
+def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal', init_gain=0.02, no_antialias=False, opt=None):
     """Create a discriminator
 
     Parameters:
@@ -295,7 +299,7 @@ def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal'
         norm (str)         -- the type of normalization layers used in the network.
         init_type (str)    -- the name of the initialization method.
         init_gain (float)  -- scaling factor for normal, xavier and orthogonal.
-        gpu_ids (int list) -- which GPUs the network runs on: e.g., 0,1,2
+
 
     Returns a discriminator
 
@@ -327,7 +331,7 @@ def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal'
         net = StyleGAN2Discriminator(input_nc, ndf, n_layers_D, no_antialias=no_antialias, opt=opt)
     else:
         raise NotImplementedError('Discriminator model name [%s] is not recognized' % netD)
-    return init_net(net, init_type, init_gain, gpu_ids,
+    return init_net(net, init_type, init_gain,
                     initialize_weights=('stylegan2' not in netD))
 
 
@@ -483,7 +487,7 @@ class ReshapeF(nn.Module):
 
 
 class StridedConvF(nn.Module):
-    def __init__(self, init_type='normal', init_gain=0.02, gpu_ids=[]):
+    def __init__(self, init_type='normal', init_gain=0.02):
         super().__init__()
         # self.conv1 = nn.Conv2d(256, 128, 3, stride=2)
         # self.conv2 = nn.Conv2d(128, 64, 3, stride=1)
@@ -492,7 +496,7 @@ class StridedConvF(nn.Module):
         self.moving_averages = {}
         self.init_type = init_type
         self.init_gain = init_gain
-        self.gpu_ids = gpu_ids
+
 
     def create_mlp(self, x):
         C, H = x.shape[1], x.shape[2]
@@ -504,7 +508,7 @@ class StridedConvF(nn.Module):
             C = max(C // 2, 64)
         mlp.append(nn.Conv2d(C, 64, 3))
         mlp = nn.Sequential(*mlp)
-        init_net(mlp, self.init_type, self.init_gain, self.gpu_ids)
+        init_net(mlp, self.init_type, self.init_gain)
         return mlp
 
     def update_moving_average(self, key, x):
@@ -529,7 +533,7 @@ class StridedConvF(nn.Module):
 
 
 class PatchSampleF(nn.Module):
-    def __init__(self, use_mlp=False, init_type='normal', init_gain=0.02, nc=256, gpu_ids=[]):
+    def __init__(self, use_mlp=False, init_type='normal', init_gain=0.02, nc=256):
         # potential issues: currently, we use the same patch_ids for multiple images in the batch
         super(PatchSampleF, self).__init__()
         self.l2norm = Normalize(2)
@@ -538,16 +542,15 @@ class PatchSampleF(nn.Module):
         self.mlp_init = False
         self.init_type = init_type
         self.init_gain = init_gain
-        self.gpu_ids = gpu_ids
+
 
     def create_mlp(self, feats):
         for mlp_id, feat in enumerate(feats):
             input_nc = feat.shape[1]
             mlp = nn.Sequential(*[nn.Linear(input_nc, self.nc), nn.ReLU(), nn.Linear(self.nc, self.nc)])
-            if len(self.gpu_ids) > 0:
-                mlp.cuda()
+            mlp = mlp.to(feat.device)  # <-- ensure created on same device as features            
             setattr(self, 'mlp_%d' % mlp_id, mlp)
-        init_net(self, self.init_type, self.init_gain, self.gpu_ids)
+        init_net(self, self.init_type, self.init_gain)
         self.mlp_init = True
 
     def forward(self, feats, num_patches=64, patch_ids=None):
@@ -566,7 +569,11 @@ class PatchSampleF(nn.Module):
                     #patch_id = torch.randperm(feat_reshape.shape[1], device=feats[0].device)
                     patch_id = np.random.permutation(feat_reshape.shape[1])
                     patch_id = patch_id[:int(min(num_patches, patch_id.shape[0]))]  # .to(patch_ids.device)
-                patch_id = torch.tensor(patch_id, dtype=torch.long, device=feat.device)
+                # patch_id = torch.tensor(patch_id, dtype=torch.long, device=feat.device)
+                if isinstance(patch_id, torch.Tensor):
+                    patch_id = patch_id.clone().detach().to(dtype=torch.long, device=feat.device)
+                else:
+                    patch_id = torch.tensor(patch_id, dtype=torch.long, device=feat.device)
                 x_sample = feat_reshape[:, patch_id, :].flatten(0, 1)  # reshape(-1, x.shape[1])
             else:
                 x_sample = feat_reshape

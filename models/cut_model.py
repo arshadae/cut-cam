@@ -7,14 +7,23 @@ import util.util as util
 
 
 class CUTModel(BaseModel):
-    """ This class implements CUT and FastCUT model, described in the paper
-    Contrastive Learning for Unpaired Image-to-Image Translation
-    Taesung Park, Alexei A. Efros, Richard Zhang, Jun-Yan Zhu
-    ECCV, 2020
+    """ This is a modification of the class implements CUT and FastCUT model, 
+    described in the paper Contrastive Learning for Unpaired Image-to-Image Translation
+    Taesung Park, Alexei A. Efros, Richard Zhang, Jun-Yan Zhu in ECCV, 2020
 
-    The code borrows heavily from the PyTorch implementation of CycleGAN
+    They code borrows heavily from the PyTorch implementation of CycleGAN
     https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix
+    
+    Modifications are made my "Arshad MA" and the modification log is provided below.
+
+        
+    Modifications log:
+    - Removed the use of opt.gpu_ids, as it is not used in the context of DDP.
+    - Removed all instance of '.to(self.device)' as the model is already moved to the correct device in the DDP setup.
+    - Changed the way the input batch is set in the model: Now it doesn't divide the batch size by the number of GPUs, as DDP handles this automatically.
+    - Added  any(p.requires_grad for p in self.netF.parameters()) condition to check if the feature network requires gradients before initializing the optimizer in data_dependent_initialization declaration.
     """
+
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
         """  Configures options specific for CUT model
@@ -72,20 +81,20 @@ class CUTModel(BaseModel):
             self.model_names = ['G']
 
         # define networks (both generator and discriminator)
-        self.netG = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.normG, not opt.no_dropout, opt.init_type, opt.init_gain, opt.no_antialias, opt.no_antialias_up, self.gpu_ids, opt)
-        self.netF = networks.define_F(opt.input_nc, opt.netF, opt.normG, not opt.no_dropout, opt.init_type, opt.init_gain, opt.no_antialias, self.gpu_ids, opt)
+        self.netG = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.normG, not opt.no_dropout, opt.init_type, opt.init_gain, opt.no_antialias, opt.no_antialias_up, opt)
+        self.netF = networks.define_F(opt.input_nc, opt.netF, opt.normG, not opt.no_dropout, opt.init_type, opt.init_gain, opt.no_antialias, opt)
 
         if self.isTrain:
-            self.netD = networks.define_D(opt.output_nc, opt.ndf, opt.netD, opt.n_layers_D, opt.normD, opt.init_type, opt.init_gain, opt.no_antialias, self.gpu_ids, opt)
+            self.netD = networks.define_D(opt.output_nc, opt.ndf, opt.netD, opt.n_layers_D, opt.normD, opt.init_type, opt.init_gain, opt.no_antialias, opt)
 
             # define loss functions
-            self.criterionGAN = networks.GANLoss(opt.gan_mode).to(self.device)
+            self.criterionGAN = networks.GANLoss(opt.gan_mode)
             self.criterionNCE = []
 
             for nce_layer in self.nce_layers:
-                self.criterionNCE.append(PatchNCELoss(opt).to(self.device))
+                self.criterionNCE.append(PatchNCELoss(opt))
 
-            self.criterionIdt = torch.nn.L1Loss().to(self.device)
+            self.criterionIdt = torch.nn.L1Loss()
             self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr, betas=(opt.beta1, opt.beta2))
             self.optimizer_D = torch.optim.Adam(self.netD.parameters(), lr=opt.lr, betas=(opt.beta1, opt.beta2))
             self.optimizers.append(self.optimizer_G)
@@ -98,7 +107,7 @@ class CUTModel(BaseModel):
         initialized at the first feedforward pass with some input images.
         Please also see PatchSampleF.create_mlp(), which is called at the first forward() call.
         """
-        bs_per_gpu = data["A"].size(0) // max(len(self.opt.gpu_ids), 1)
+        bs_per_gpu = data["A"].size(0)
         self.set_input(data)
         self.real_A = self.real_A[:bs_per_gpu]
         self.real_B = self.real_B[:bs_per_gpu]
@@ -106,7 +115,7 @@ class CUTModel(BaseModel):
         if self.opt.isTrain:
             self.compute_D_loss().backward()                  # calculate gradients for D
             self.compute_G_loss().backward()                   # calculate graidents for G
-            if self.opt.lambda_NCE > 0.0:
+            if self.opt.lambda_NCE > 0.0 and any(p.requires_grad for p in self.netF.parameters()):
                 self.optimizer_F = torch.optim.Adam(self.netF.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, self.opt.beta2))
                 self.optimizers.append(self.optimizer_F)
 
@@ -139,8 +148,8 @@ class CUTModel(BaseModel):
         The option 'direction' can be used to swap domain A and domain B.
         """
         AtoB = self.opt.direction == 'AtoB'
-        self.real_A = input['A' if AtoB else 'B'].to(self.device)
-        self.real_B = input['B' if AtoB else 'A'].to(self.device)
+        self.real_A = input['A' if AtoB else 'B']
+        self.real_B = input['B' if AtoB else 'A']
         self.image_paths = input['A_paths' if AtoB else 'B_paths']
 
     def forward(self):

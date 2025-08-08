@@ -1,19 +1,29 @@
 import os
 import torch
-import torch.nn as nn
 from collections import OrderedDict
 from abc import ABC, abstractmethod
 from . import networks
 
 
-class BaseModel(nn.Module, ABC):
-    """This class is an abstract base class (ABC) for models.
+class BaseModel(torch.nn.Module, ABC):
+    """
+    This class is modified from the original BaseModel class in contrastive-unpaired-translation repository to better suit DDP processing.
+    
+    
+    This class is an abstract base class (ABC) for models.
     To create a subclass, you need to implement the following five functions:
         -- <__init__>:                      initialize the class; first call BaseModel.__init__(self, opt).
         -- <set_input>:                     unpack data from dataset and apply preprocessing.
         -- <forward>:                       produce intermediate results.
         -- <optimize_parameters>:           calculate losses, gradients, and update network weights.
         -- <modify_commandline_options>:    (optionally) add model-specific options and set default options.
+    
+    Modifications are to support distributed data parallel (DDP) training are made by Arshad MA and the modification log is provided below.
+    - Inherited from torch.nn.Module to support DDP
+    - Removed all instances of --gpu_ids as they are irrelevant in DDP context
+    - Modified the self.device initialization to use the current device based on DDP rank
+    - Removed parallelize() method as DDP handles parallelization
+    - Modified save_networks() to save the underlying module if wrapped in DDP or DataParallel
     """
 
     def __init__(self, opt):
@@ -32,9 +42,13 @@ class BaseModel(nn.Module, ABC):
         """
         super().__init__()
         self.opt = opt
-        self.gpu_ids = opt.gpu_ids
+        # self.gpu_ids = opt.gpu_ids
         self.isTrain = opt.isTrain
-        self.device = torch.device('cuda:{}'.format(self.gpu_ids[0])) if self.gpu_ids else torch.device('cpu')  # get device name: CPU or GPU
+        # self.device = torch.device('cuda:{}'.format(self.gpu_ids[0])) if self.gpu_ids else torch.device('cpu')  # get device name: CPU or GPU
+        if torch.cuda.is_available():
+            self.device = torch.device(f'cuda:{torch.cuda.current_device()}')
+        else:
+            self.device = torch.device('cpu')
         self.save_dir = os.path.join(opt.checkpoints_dir, opt.name)  # save all the checkpoints to save_dir
         if opt.preprocess != 'scale_width':  # with [scale_width], input images might have different sizes, which hurts the performance of cudnn.benchmark.
             torch.backends.cudnn.benchmark = True
@@ -102,11 +116,11 @@ class BaseModel(nn.Module, ABC):
 
         self.print_networks(opt.verbose)
 
-    def parallelize(self):
-        for name in self.model_names:
-            if isinstance(name, str):
-                net = getattr(self, 'net' + name)
-                setattr(self, 'net' + name, torch.nn.DataParallel(net, self.opt.gpu_ids))
+    # def parallelize(self):
+    #     for name in self.model_names:
+    #         if isinstance(name, str):
+    #             net = getattr(self, 'net' + name)
+    #             setattr(self, 'net' + name, torch.nn.DataParallel(net, self.opt.gpu_ids))
 
     def data_dependent_initialize(self, data):
         pass
@@ -163,6 +177,24 @@ class BaseModel(nn.Module, ABC):
                 errors_ret[name] = float(getattr(self, 'loss_' + name))  # float(...) works for both scalar tensor and float number
         return errors_ret
 
+    # def save_networks(self, epoch):
+    #     """Save all the networks to the disk.
+
+    #     Parameters:
+    #         epoch (int) -- current epoch; used in the file name '%s_net_%s.pth' % (epoch, name)
+    #     """
+    #     for name in self.model_names:
+    #         if isinstance(name, str):
+    #             save_filename = '%s_net_%s.pth' % (epoch, name)
+    #             save_path = os.path.join(self.save_dir, save_filename)
+    #             net = getattr(self, 'net' + name)
+
+    #             if len(self.gpu_ids) > 0 and torch.cuda.is_available():
+    #                 torch.save(net.module.cpu().state_dict(), save_path)
+    #                 net.cuda(self.gpu_ids[0])
+    #             else:
+    #                 torch.save(net.cpu().state_dict(), save_path)
+
     def save_networks(self, epoch):
         """Save all the networks to the disk.
 
@@ -175,11 +207,17 @@ class BaseModel(nn.Module, ABC):
                 save_path = os.path.join(self.save_dir, save_filename)
                 net = getattr(self, 'net' + name)
 
-                if len(self.gpu_ids) > 0 and torch.cuda.is_available():
-                    torch.save(net.module.cpu().state_dict(), save_path)
-                    net.cuda(self.gpu_ids[0])
-                else:
-                    torch.save(net.cpu().state_dict(), save_path)
+                # If DDP or DataParallel wrapper, get the underlying module
+                net_to_save = net.module if hasattr(net, 'module') else net
+
+                # Save on CPU to avoid GPU memory overhead during saving
+                cpu_net = net_to_save.cpu()
+                torch.save(cpu_net.state_dict(), save_path)
+
+                # Move back to original device if applicable
+                if torch.cuda.is_available() and len(self.gpu_ids) > 0:
+                    net_to_save.cuda(self.gpu_ids[0])
+
 
     def __patch_instance_norm_state_dict(self, state_dict, module, keys, i=0):
         """Fix InstanceNorm checkpoints incompatibility (prior to 0.4)"""

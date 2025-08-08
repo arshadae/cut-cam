@@ -7,10 +7,16 @@ import data
 
 
 class BaseOptions():
-    """This class defines options used during both training and test time.
+    """
+    This class has minor modifications compared to the original BaseOptions class in contrastive-unpaired-translation repo.
 
+    This class defines options used during both training and test time.
     It also implements several helper functions such as parsing, printing, and saving the options.
     It also gathers additional options defined in <modify_commandline_options> functions in both dataset class and model class.
+    
+    Modifications log:
+    - Removed GPU ID handling since it is not used in the DDP context.
+    - Changed some default values to be more suitable for the DDP use case.
     """
 
     def __init__(self, cmd_line=None):
@@ -26,7 +32,7 @@ class BaseOptions():
         parser.add_argument('--dataroot', default='placeholder', help='path to images (should have subfolders trainA, trainB, valA, valB, etc)')
         parser.add_argument('--name', type=str, default='experiment_name', help='name of the experiment. It decides where to store samples and models')
         parser.add_argument('--easy_label', type=str, default='experiment_name', help='Interpretable name')
-        parser.add_argument('--gpu_ids', type=str, default='0', help='gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU')
+        # parser.add_argument('--gpu_ids', type=str, default='0', help='gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU')
         parser.add_argument('--checkpoints_dir', type=str, default='./checkpoints', help='models are saved here')
         # model parameters
         parser.add_argument('--model', type=str, default='cut', help='chooses which model to use.')
@@ -149,16 +155,6 @@ class BaseOptions():
             opt.name = opt.name + suffix
 
         # self.print_options(opt)
-
-        # set gpu ids
-        str_ids = opt.gpu_ids.split(',')
-        opt.gpu_ids = []
-        for str_id in str_ids:
-            id = int(str_id)
-            if id >= 0:
-                opt.gpu_ids.append(id)
-        if len(opt.gpu_ids) > 0:
-            torch.cuda.set_device(opt.gpu_ids[0])
 
         self.opt = opt
         return self.opt
