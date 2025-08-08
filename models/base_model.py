@@ -207,16 +207,17 @@ class BaseModel(torch.nn.Module, ABC):
                 save_path = os.path.join(self.save_dir, save_filename)
                 net = getattr(self, 'net' + name)
 
-                # If DDP or DataParallel wrapper, get the underlying module
+                # Handle DataParallel or DDP wrappers
                 net_to_save = net.module if hasattr(net, 'module') else net
 
-                # Save on CPU to avoid GPU memory overhead during saving
-                cpu_net = net_to_save.cpu()
-                torch.save(cpu_net.state_dict(), save_path)
+                # Store the current device before moving to CPU
+                orig_device = next(net_to_save.parameters()).device
 
-                # Move back to original device if applicable
-                if torch.cuda.is_available() and len(self.gpu_ids) > 0:
-                    net_to_save.cuda(self.gpu_ids[0])
+                # Save from CPU to reduce GPU memory usage
+                torch.save(net_to_save.cpu().state_dict(), save_path)
+
+                # Move back to original device
+                net_to_save.to(orig_device)
 
 
     def __patch_instance_norm_state_dict(self, state_dict, module, keys, i=0):
