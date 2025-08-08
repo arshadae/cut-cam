@@ -45,7 +45,7 @@ def train(rank, world_size):
         sampler=sampler,
         num_workers=int(opt.num_threads), 
         drop_last=True if opt.isTrain else False)
-    
+    dataset_size = len(dataloader.dataset)
     # model = create_model(opt)      # create a model given opt.model and other options
     # print('The number of training images = %d' % dataset_size)
     # Create model
@@ -59,7 +59,7 @@ def train(rank, world_size):
     model = ddp_model.module if is_distributed else ddp_model
     
     if rank == 0:  # Only print dataset size from the main process
-        print('The number of training images = %d' % len(dataloader.dataset))
+        print('The number of training images = %d' % dataset_size)
         visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
         # opt.visualizer = visualizer
     else:
