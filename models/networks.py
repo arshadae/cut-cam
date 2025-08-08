@@ -205,9 +205,9 @@ def init_net(net, init_type='normal', init_gain=0.02, gpu_ids=[], debug=False, i
 
     Return an initialized network.
     """
-    # if len(gpu_ids) > 0:
-    #     assert(torch.cuda.is_available())
-    #     net.to(gpu_ids[0])
+    if len(gpu_ids) > 0:
+        assert(torch.cuda.is_available())
+        net.to(gpu_ids[0])
         # if not amp:
         # net = torch.nn.DataParallel(net, gpu_ids)  # multi-GPUs for non-AMP training
     if initialize_weights:
@@ -930,9 +930,8 @@ class ResnetGenerator(nn.Module):
             n_blocks (int)      -- the number of ResNet blocks
             padding_type (str)  -- the name of padding layer in conv layers: reflect | replicate | zero
         """
-        super(ResnetGenerator, self).__init__()
-
         assert(n_blocks >= 0)
+        super(ResnetGenerator, self).__init__()
         self.opt = opt
         if type(norm_layer) == functools.partial:
             use_bias = norm_layer.func == nn.InstanceNorm2d
