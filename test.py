@@ -55,7 +55,7 @@ if __name__ == '__main__':
         if i == 0:
             model.data_dependent_initialize(data)
             model.setup(opt)               # regular setup: load and print networks; create schedulers
-            model.parallelize()
+            # model.parallelize()
             if opt.eval:
                 model.eval()
         if i >= opt.num_test:  # only apply our model to opt.num_test images.
