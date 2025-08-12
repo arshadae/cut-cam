@@ -9,3 +9,15 @@ GPUtil>=1.4.0
 numpy==1.26.4
 scikit-image==0.25.2
 captum>=0.8.0
+
+
+# torch>=2.0.0
+# torchvision>=0.15.0
+# numpy>=1.23.0
+# scipy>=1.10.0
+# scikit-learn>=1.2.0
+# Pillow>=9.4.0
+# matplotlib>=3.7.0
+# tqdm>=4.65.0
+# lpips>=0.1.4
+umap-learn>=0.5.4
