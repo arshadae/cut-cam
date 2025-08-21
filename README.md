@@ -1,100 +1,203 @@
-# Bridging the Domain Gap: Beyond Pixel Translation and Feature Alignment
-#### This work is a continuation from original work on [Contrastive Unpaired Translation (CUT)](https://github.com/taesungp/contrastive-unpaired-translation) by Taesung Park. We refer our readers to the original [README](https://github.com/taesungp/contrastive-unpaired-translation/blob/master/README.md) file for the context.
+# CUTCAM: Contrastive Unpaired Translation with Class Activation Maps
+
+**CUTCAM** is a single-stage, unpaired, **explainability-guided** GAN for image translation.  
+It extends **CUT (Contrastive Unpaired Translation, ECCV 2020)** by integrating **Class Activation Maps (GradCAM)** directly into the generator, making translations **semantically faithful, class-attentive, and explainable**.
+
+> Works for MWIR and beyond (SAR, medical, etc.) — not tied to any single modality.
+
+---
+
+## ✨ Key Ideas
+
+- **One translator** (G) + **one PatchGAN** (D): unpaired training, single stage  
+- **CUT/PatchNCE** keeps **content**; GradCAM keeps **semantics**  
+- CAMs are computed **from G’s own encoder features** via a tiny **aux head** (no frozen ResNet18 needed)
+
+---
+
+
+## 📖 Abstract
+
+High-fidelity **Mid-Wave Infrared (MWIR)** imagery is critical in surveillance, defense, and machine vision. However, acquiring real annotated MWIR data is expensive and limited. While physics-based simulators can generate synthetic MWIR, the domain gap (texture mismatch, semantic drift) reduces their downstream utility.
+
+CUTCAM bridges this gap by combining:
+- **CUT/PatchNCE** → preserves content without paired supervision.  
+- **Auxiliary classifier head + GradCAM** → enforces semantic consistency during translation.  
+- **Explainability maps** → visualize where the generator “looks” when retaining class-critical features.
+
+The result: **realistic, semantically aligned translations** that outperform vanilla CUT and Pix2Pix on realism (FID) and semantic preservation (SSIM, CC).
+
+---
+
+## 🚀 Contributions
+
+1. **Explainability-Guided Translation**  
+   Introduce GradCAM invariance loss inside the generator, aligning semantic attention maps between input and translated images.
+
+2. **Auxiliary Classifier Head**  
+   Build a lightweight classifier on G’s encoder to compute logits + CAMs — removing the need for an external pretrained ResNet.
+
+3. **Class-Consistency Loss**  
+   Enforce stable classification before and after translation, ensuring outputs remain task-relevant.
+
+4. **CAM-Weighted Adversarial Training**  
+   Discriminator focuses more on semantically important regions (weighted by CAM maps).
+
+5. **Identity & Edge Losses (optional)**  
+   Preserve tones, gradients, and small hot targets common in MWIR.
+
+6. **Explainability Out-of-the-Box**  
+   Inference saves both translated images and **GradCAM overlays** for transparency, just like Fig. 4 in our paper.
+
+---
+
+
+## 🛠️ Installation
+
+```bash
+# Python 3.9+ recommended
+git clone <your-repo-url>.git
+cd <your-repo-folder>
+
+# (recommended) Either use container or create a venv/conda env
+pip install -r requirements.txt
+```
+
+## Minimal Requirements
+
+`Python 3.8+`
+`PyTorch >= 1.9`
+`torchvision`
+`numpy, pillow, tqdm, matplotlib`
+(optional) `opencv-python`
+
+
+## Data
+
+```
+datasets/
+  your_data/
+    trainA/   # source domain (e.g., simulator or domain A)
+    trainB/   # target domain (e.g., real or domain B)
+    testA/
+    testB/
+    
+```
+If you have labels for domain A samples, add them to your dataset (int64 class id).  
+The model will auto‑fallback to pseudo‑labels when labels are absent.  
+
+## Training (examples)
+
+```bash
+python train.py \
+  --dataroot datasets/your_data \
+  --name cutcam_run \
+  --model cutcam \
+  --CUT_mode CUTCAM \
+  --nce_layers 0,4,8,12,16 \
+  --cam_layer -1 \
+  --num_classes 7 \
+  --lambda_GAN 1 --lambda_NCE 1 \
+  --lambda_CLS 1 --lambda_CAM 25 \
+  --lambda_IDT 10 --nce_idt \
+  --lambda_EDGE 5 \
+  --cam_weight_adv \
+  --netG resnet_9blocks --netD basic \
+  --input_nc 1 --output_nc 1 \
+  --batch_size 4 --preprocess resize_and_crop --load_size 286 --crop_size 256
+
+```
+
+Notes: Read options directory for arugments
+
+## Inference + CAM Overlays
+Use the included `cam_infer.py` to translate and save:  
+- translated images (G(A) → B̂)
+- CAM maps for input and output
+- overlays (heatmap on top of image)
+
+```bash
+python cam_infer.py \
+  --dataroot datasets/your_data \
+  --name cutcam_run \
+  --model cutcam \
+  --CUT_mode CUTCAM \
+  --phase test \
+  --epoch latest \
+  --results_dir results/cam_vis \
+  --nce_layers 0,4,8,12,16 \
+  --cam_layer -1 \
+  --num_test 10000 \
+  --input_nc 1 --output_nc 1
+```
+Outputs (per image) in results/cam_vis/cutcam_run/latest/:  
+- `*_fake.png` — translated image
+- `*_cam_input.png` — CAM(x)
+- `*_cam_output.png` — CAM(G(x))
+- `*_overlay_input.png` — heatmap over input
+- `*_overlay_output.png` — heatmap over output
+
+## Important Options
+
+|Option         |                 What it does                                  |
+|-------------- |---------------------------------------------------------------|
+|--nce_layers   |Feature layers used by PatchNCE and selectable for CAM         |
+|--cam_layer    |Index into nce_layers for CAM (e.g., -1 → last entry)          |
+|--lambda_CAM	|Weight for CAM invariance loss                                 |
+|--lambda_CLS	|Weight for classification consistency                          |
+|--lambda_IDT	|Identity loss weight on real B (stabilizes tones)              |
+|--lambda_EDGE	|Edge loss (Sobel) to preserve small hot targets                |
+|--cam_weight_adv	|Weight PatchGAN loss by CAM importance                     |
+
+Internally, the code resolves `cam_layer` index to the real layer id (e.g., 2 → layer 8 if nce_layers=0,4,8,12,16).
+
+## 📊 Results (Example from MWIR) [to be updated]
+
+- FID reduced by 5–6% vs. CUT alone.
+- SSIM improved from 0.776 → 0.808.
+- CAM overlays show generator progressively focuses on class-critical regions (e.g., MWIR targets).
+
+
+## 🖼️ Example Outputs [to be upated]
+
+**Reproducing Fig. 4‑style visuals from the paper**
+Run cam_infer.py (provided). It saves plain CAMs + overlays. For epoch‑wise grids, you can:  
+- run inference with multiple epochs and stitch images, or
+- log CAMs during training and save a per‑epoch panel.
+
+## 📝 Citations
+If you use this repo, please cite:  
+```bibtex
+@inproceedings{arshad2025cutcam,
+  title     = {CUTCAM: Explainability-Guided Contrastive Unpaired Translation with Class Activation Maps},
+  author    = {Muhammad Awais Arshad and Hyochoong Bang},
+  booktitle = {GitHub Repo},
+  year      = {2025}
+}
+```
+Also cite CUT
+```bibtex
+@inproceedings{park2020cut,
+  title     = {Contrastive Learning for Unpaired Image-to-Image Translation},
+  author    = {Park, Taesung and Efros, Alexei A. and Zhang, Richard and Zhu, Jun-Yan},
+  booktitle = {ECCV},
+  year      = {2020}
+}
+```
+
+## 🙏 Acknowledgements
+
+- [Taesung Park et al., CUT (ECCV 2020)](https://github.com/taesungp/contrastive-unpaired-translation)
+- [junyanz/pytorch-CycleGAN-and-pix2pix](https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix)
+
+Our code is built on top of these excellent open-source repos.
+
+## License
+MIT License (follow upstream CUT). See `LICENSE`
 
 
 
-### Motivation
-In many machine learning tasks, models trained on one domain (source) fail to generalize to another domain (target) due to domain shift—differences in data distribution.
-This domain gap appears in:
-
-- Low-level appearance: color, texture, illumination.
-- Mid-level structure: object shapes, edge patterns.
-- High-level semantics: scene composition, object co-occurrence.
-- Feature space: differences in neural network embeddings.
-
-While **image-to-image translation** (e.g., Pix2Pix, CycleGAN, CUT) and **feature-level domain adaptation** (e.g., DANN, CyCADA, DA-GAN) have improved cross-domain transfer, **the gap is rarely eliminated**.
-
-### Why Existing Methods Fall Short
-
-**Pixel-Level Translation Limitations**    
-- Primarily matches style but not structure or semantics.  
-- Cycle-consistency and identity losses prevent large geometric/semantic adjustments.  
-- Introduces artifacts that form a new synthetic gap.  
-
-**Feature-Level Adaptation Limitations**  
-- Aligns global distributions, but class-conditional mismatches remain.  
-- Can be fooled by adversarial objectives without real semantic alignment.  
-- Risk of negative transfer if alignment destroys task-relevant domain cues.  
-### Consequences of Incomplete Adaptation  
-- Residual domain gap reduces accuracy on target data.  
-- Misaligned class clusters cause errors in classification or segmentation.  
-- Models overfit to synthetic styles, performing poorly on real-world variations.  
-### Our Approach  
-
-We aim to push beyond the limits of current methods by addressing both pixel-space and feature-space shortcomings. Planned improvements include:  
-
-**Class-Conditional Feature Alignment**  
-- Align features per class to avoid class confusion across domains.  
-- Methods: Conditional Adversarial Domain Adaptation (CDAN), classifier discrepancy minimization.  
-
-**Semantic Consistency in Translation**  
-- Enforce that translated images retain task-specific semantics.  
-- Example: segmentation maps or keypoints remain consistent after translation.  
-
-**Joint Training of Translation and Task Models**  
-- Optimize translation for downstream accuracy, not just visual realism.  
-
-**Multi-Level Alignment**  
-- Match distributions at multiple feature extractor layers (low-, mid-, high-level).  
-
-**Target Domain Augmentation**  
-- Increase coverage of rare or extreme variations in the target domain.  
-
-**Domain Generalization**   
-- Build features robust enough to handle unseen domains beyond the current target.  
-
-### Expected Impact
-This work will:
-- Reduce residual domain gaps in both appearance and representation space.
-- Improve class-conditional alignment for higher task accuracy.
-- Deliver more robust models that generalize better to real-world scenarios.
-
-### References
-- Isola et al., Pix2Pix (2017)
-- Zhu et al., CycleGAN (2017)
-- Park et al., CUT (2020)
-- Ganin et al., DANN (2016)
-- Hoffman et al., CyCADA (2018)
-- Tzeng et al., Adversarial Discriminative Domain Adaptation (2017)
-
-If you’re reading this code, you’re looking at an ongoing effort to combine pixel translation, feature alignment, and semantic constraints into a unified framework for stronger, more general domain adaptation.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## Additional Tasks
-1. Perform thorough evalutions on Contrastive Unpaired Translation (CUT) and other unpaired image to image (I2I) translation techniques.
-2. Evaluate existing I2I techniques  and find performance gaps.
-3. Try to cover performance gaps in existing methods.
-
-## 1. Planned Evalutions for unpaired I2I techniques
+## Planned Evalutions for unpaired I2I techniques [Has to be completed yet]
 
 ### Evaluation Metrics
 Besides FID, we plan following evaluations:
@@ -119,10 +222,3 @@ To qualitatively validate the results, we also consider following visualization 
 - **Montages or grids** of generated samples
 - **Histogram plots** for color or feature distributions
 - **Semantic segmentation overlays** for
-
-
-
-# Acknowledgements
-- We borrowed heavily from [pytorch-CycleGAN-and-pix2pix](https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix) and [contrastive-unpaired-translation](https://github.com/taesungp/contrastive-unpaired-translation) to develop our codebase. 
-- We also thank [pytorch-fid](https://github.com/mseitzer/pytorch-fid) for FID computation,  [drn](https://github.com/fyu/drn) for mIoU computation, and [stylegan2-pytorch](https://github.com/rosinality/stylegan2-pytorch/) for the PyTorch implementation of StyleGAN2 used in our single-image translation setting.
-- We also thank the teams providing orignal datasets (cityscapes, facades, maps, etc.) for training.

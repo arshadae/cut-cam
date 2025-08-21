@@ -4,6 +4,7 @@ from data.image_folder import make_dataset
 from PIL import Image
 import random
 import util.util as util
+import torch
 
 
 class UnalignedDataset(BaseDataset):
@@ -48,6 +49,9 @@ class UnalignedDataset(BaseDataset):
             B (tensor)       -- its corresponding image in the target domain
             A_paths (str)    -- image paths
             B_paths (str)    -- image paths
+
+        Modified from the original CUT dataset to include class ids.
+            cls (tensor)     -- class ids for the images (temporary, for demonstration)
         """
         A_path = self.A_paths[index % self.A_size]  # make sure index is within then range
         if self.opt.serial_batches:   # make sure index is within then range
@@ -67,7 +71,13 @@ class UnalignedDataset(BaseDataset):
         A = transform(A_img)
         B = transform(B_img)
 
-        return {'A': A, 'B': B, 'A_paths': A_path, 'B_paths': B_path}
+        class_ids = 1 # torch.randint(0, self.opt.num_classes, (1,), dtype=torch.long) # temporary class ids for demonstration
+
+        return {'A': A, 'B': B,
+                'A_paths': A_path, 'B_paths': B_path,
+                # 'cls': torch.tensor(class_ids, dtype=torch.long)
+                }
+    
 
     def __len__(self):
         """Return the total number of images in the dataset.
