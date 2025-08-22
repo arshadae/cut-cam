@@ -214,7 +214,7 @@ class CUTCAMModel(BaseModel):
         # update G (and C, and F)
         self.set_requires_grad(self.netD, False)
         self.optimizer_G.zero_grad()
-        if hasattr(self, 'opimizer_F') and self.opt.netF == 'mlp_sample':
+        if hasattr(self, 'optimizer_F') and self.opt.netF == 'mlp_sample':
             self.optimizer_F.zero_grad()
         if hasattr(self, 'optimizer_C'):
             self.optimizer_C.zero_grad()
