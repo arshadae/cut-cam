@@ -3,6 +3,7 @@ import torch
 from collections import OrderedDict
 from abc import ABC, abstractmethod
 from . import networks
+import torch.distributed as dist
 
 
 class BaseModel(torch.nn.Module, ABC):
@@ -218,6 +219,33 @@ class BaseModel(torch.nn.Module, ABC):
 
                 # Move back to original device
                 net_to_save.to(orig_device)
+
+
+    def save_networks_wait(self, epoch):
+        is_dist = dist.is_available() and dist.is_initialized()
+        rank = dist.get_rank() if is_dist else 0
+
+        if rank == 0:
+            for name in self.model_names:
+                if not isinstance(name, str):
+                    continue
+                save_filename = f'{epoch}_net_{name}.pth'
+                save_path = os.path.join(self.save_dir, save_filename)
+
+                net = getattr(self, 'net' + name)
+                net_to_save = net.module if hasattr(net, 'module') else net  # unwrap DDP/DP
+
+                # Copy tensors to CPU WITHOUT moving the live module
+                state = {k: v.detach().cpu() for k, v in net_to_save.state_dict().items()}
+
+                # (Optional) atomic write
+                tmp_path = save_path + ".tmp"
+                torch.save(state, tmp_path)
+                os.replace(tmp_path, save_path)
+
+        # (Optional) sync so other ranks don't move on before files exist
+        if is_dist:
+            dist.barrier()
 
 
     def __patch_instance_norm_state_dict(self, state_dict, module, keys, i=0):

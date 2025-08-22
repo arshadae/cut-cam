@@ -46,6 +46,7 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--nnodes', type=int, default=1, help='number of nodes for distributed training (e.g., sever nodes)')
         parser.add_argument('--nprocs_per_node', type=int, default=4, help='number of processes per node for distributed training (world_size)')
         parser.add_argument('--node_rank', type=int, default=0, help='node rank for distributed training')
+        parser.add_argument('--seed', type=int, default=0, help='random seed for training reproducibility')
 
 
         self.isTrain = True

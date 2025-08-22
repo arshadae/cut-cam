@@ -46,7 +46,7 @@ class CUTCAMModel(BaseModel):
     --lambda_EDGE 5 \
     --cam_weight_adv \
     --cam_layer -1   # use last layer from --nce_layers
-    
+
     """
 
     @staticmethod

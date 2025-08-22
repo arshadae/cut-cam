@@ -14,7 +14,7 @@ from data.unaligned_dataset import UnalignedDataset # Shit to be handled
 
 
 def setup(rank, world_size):
-    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_ADDR'] = 'localhost' # Only suitable for single node. replace with real addresses for multinode setup
     os.environ['MASTER_PORT'] = '12357'  # Use a free port
     dist.init_process_group("nccl", rank=rank, world_size=world_size)
     torch.cuda.set_device(rank)
@@ -30,6 +30,7 @@ def move_dict_to_device(batch, device):
     }
 
 def train(rank, world_size):
+    torch.autograd.set_detect_anomaly(True)
     is_distributed = world_size > 1
     if is_distributed:
         setup(rank, world_size)
@@ -46,9 +47,26 @@ def train(rank, world_size):
     my_model.data_dependent_initialize(first_batch)
     my_model.setup(opt) # regular setup: load and print networks; create schedulers
     
-    ddp_model = DDP(my_model, device_ids=[rank], find_unused_parameters=True) if is_distributed else my_model
-    model = ddp_model.module if is_distributed else ddp_model
-    
+    if is_distributed:
+        # Wrap the model with DistributedDataParallel
+        # Note: find_unused_parameters=True is used if your model has branches that may not be used in every forward pass
+        # This is useful for models with multiple outputs or conditional branches.
+        # If your model does not have such branches, you can set find_unused_parameters=False for better performance.
+        # If you are not sure, you can start with find_unused_parameters=True and then optimize later.
+        my_model.netG = DDP(my_model.netG, device_ids=[rank], find_unused_parameters=False)
+        if hasattr(my_model, 'netD'):
+            my_model.netD = DDP(my_model.netD, device_ids=[rank], find_unused_parameters=False)
+        if hasattr(my_model, 'netF'):
+            my_model.netF = DDP(my_model.netF, device_ids=[rank], find_unused_parameters=False)
+        if hasattr(my_model, 'netC'):
+            my_model.netC = DDP(my_model.netC, device_ids=[rank], find_unused_parameters=False)  
+
+
+    # ddp_model = DDP(my_model, device_ids=[rank], find_unused_parameters=True) if is_distributed else my_model
+    # model = ddp_model.module if is_distributed else ddp_model
+    model = my_model  # Use the model directly, as it is already wrapped in DDP if needed
+
+
     if rank == 0:  # Only print dataset size from the main process
         print('The number of training images = %d' % dataset_size)
         visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots

@@ -103,7 +103,7 @@ python train.py \
   --lambda_EDGE 5 \
   --cam_weight_adv \
   --netG resnet_9blocks --netD basic \
-  --input_nc 1 --output_nc 1 \
+  --input_nc 3 --output_nc 3 \
   --batch_size 4 --preprocess resize_and_crop --load_size 286 --crop_size 256
 
 ```
@@ -128,7 +128,7 @@ python cam_infer.py \
   --nce_layers 0,4,8,12,16 \
   --cam_layer -1 \
   --num_test 10000 \
-  --input_nc 1 --output_nc 1
+  --input_nc 3 --output_nc 3
 ```
 Outputs (per image) in results/cam_vis/cutcam_run/latest/:  
 - `*_fake.png` — translated image
