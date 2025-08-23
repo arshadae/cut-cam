@@ -43,9 +43,7 @@ class BaseModel(torch.nn.Module, ABC):
         """
         super().__init__()
         self.opt = opt
-        # self.gpu_ids = opt.gpu_ids
         self.isTrain = opt.isTrain
-        # self.device = torch.device('cuda:{}'.format(self.gpu_ids[0])) if self.gpu_ids else torch.device('cpu')  # get device name: CPU or GPU
         if torch.cuda.is_available():
             self.device = torch.device(f'cuda:{torch.cuda.current_device()}')
         else:
@@ -117,12 +115,6 @@ class BaseModel(torch.nn.Module, ABC):
 
         self.print_networks(opt.verbose)
 
-    # def parallelize(self):
-    #     for name in self.model_names:
-    #         if isinstance(name, str):
-    #             net = getattr(self, 'net' + name)
-    #             setattr(self, 'net' + name, torch.nn.DataParallel(net, self.opt.gpu_ids))
-
     def data_dependent_initialize(self, data):
         pass
 
@@ -160,7 +152,7 @@ class BaseModel(torch.nn.Module, ABC):
                 scheduler.step()
 
         lr = self.optimizers[0].param_groups[0]['lr']
-        print('learning rate = %.7f' % lr)
+        # print('learning rate = %.7f' % lr)
 
     def get_current_visuals(self):
         """Return visualization images. train.py will display these images with visdom, and save the images to a HTML"""
@@ -178,50 +170,8 @@ class BaseModel(torch.nn.Module, ABC):
                 errors_ret[name] = float(getattr(self, 'loss_' + name))  # float(...) works for both scalar tensor and float number
         return errors_ret
 
-    # def save_networks(self, epoch):
-    #     """Save all the networks to the disk.
-
-    #     Parameters:
-    #         epoch (int) -- current epoch; used in the file name '%s_net_%s.pth' % (epoch, name)
-    #     """
-    #     for name in self.model_names:
-    #         if isinstance(name, str):
-    #             save_filename = '%s_net_%s.pth' % (epoch, name)
-    #             save_path = os.path.join(self.save_dir, save_filename)
-    #             net = getattr(self, 'net' + name)
-
-    #             if len(self.gpu_ids) > 0 and torch.cuda.is_available():
-    #                 torch.save(net.module.cpu().state_dict(), save_path)
-    #                 net.cuda(self.gpu_ids[0])
-    #             else:
-    #                 torch.save(net.cpu().state_dict(), save_path)
 
     def save_networks(self, epoch):
-        """Save all the networks to the disk.
-
-        Parameters:
-            epoch (int) -- current epoch; used in the file name '%s_net_%s.pth' % (epoch, name)
-        """
-        for name in self.model_names:
-            if isinstance(name, str):
-                save_filename = '%s_net_%s.pth' % (epoch, name)
-                save_path = os.path.join(self.save_dir, save_filename)
-                net = getattr(self, 'net' + name)
-
-                # Handle DataParallel or DDP wrappers
-                net_to_save = net.module if hasattr(net, 'module') else net
-
-                # Store the current device before moving to CPU
-                orig_device = next(net_to_save.parameters()).device
-
-                # Save from CPU to reduce GPU memory usage
-                torch.save(net_to_save.cpu().state_dict(), save_path)
-
-                # Move back to original device
-                net_to_save.to(orig_device)
-
-
-    def save_networks_wait(self, epoch):
         is_dist = dist.is_available() and dist.is_initialized()
         rank = dist.get_rank() if is_dist else 0
 
@@ -242,10 +192,6 @@ class BaseModel(torch.nn.Module, ABC):
                 tmp_path = save_path + ".tmp"
                 torch.save(state, tmp_path)
                 os.replace(tmp_path, save_path)
-
-        # (Optional) sync so other ranks don't move on before files exist
-        if is_dist:
-            dist.barrier()
 
 
     def __patch_instance_norm_state_dict(self, state_dict, module, keys, i=0):
