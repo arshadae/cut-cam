@@ -189,7 +189,9 @@ class CUTCAMModel(BaseModel):
         # build netC based on encoder feature shape
         with torch.no_grad():
             fA = self.netG(self.real_A, [self.cam_layer_idx], encode_only=True)[0]
-        self._build_netC_if_needed(fA)
+        
+        if True:  # Assuming no class labels are never provided at training time. update later for other cases
+            self._build_netC_if_needed(fA) 
 
         if self.opt.isTrain:
             # prime optimizers (kept behavior)
@@ -277,7 +279,7 @@ class CUTCAMModel(BaseModel):
         return self.loss_D
 
     # ------ G total loss ------
-    def compute_G_loss_old(self):
+    def compute_G_loss_cut(self):
         """Calculate GAN and NCE loss for the generator"""
         fake = self.fake_B
         # First, G(A) should fake the discriminator

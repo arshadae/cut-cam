@@ -15,7 +15,7 @@ from data.unaligned_dataset import UnalignedDataset # Shit to be handled
 
 def setup(rank, world_size):
     os.environ['MASTER_ADDR'] = 'localhost' # Only suitable for single node. replace with real addresses for multinode setup
-    os.environ['MASTER_PORT'] = '12357'  # Use a free port
+    os.environ['MASTER_PORT'] = '12355'  # Use a free port
     dist.init_process_group("nccl", rank=rank, world_size=world_size)
     torch.cuda.set_device(rank)
 
